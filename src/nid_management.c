@@ -6,8 +6,8 @@ int main() {
     int serverLen, clientLen, requestLen, responseLen;
     struct sockaddr_in6 serverAddress;
     struct sockaddr_in6 clientAddress;
-    struct UserRequest request;
-    struct UserResponse response;
+    struct NIDRequest request;
+    struct NIDResponse response;
 
     serverSockfd = socket(AF_INET6, SOCK_STREAM, 0);
     serverAddress.sin6_family = AF_INET6;

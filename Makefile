@@ -1,4 +1,4 @@
-all: nid_management 
+all: generate 
 
 CC = gcc
 
@@ -8,5 +8,8 @@ CFLAGS = -g -Wall -ansi
 
 MAKE = make
 
-nid_management: 
-	(cd src; $(MAKE); mv nid_management ..)
+generate: 
+	(mkdir ./bin; cd src; $(MAKE); mv nid_management ../bin; mv ip_generation ../bin;)
+
+clean:
+	-rm -rf ./bin
