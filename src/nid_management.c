@@ -1,5 +1,6 @@
 #include "common_headers.h"
 #include "nid_interface.h"
+#include "configuration.h"
 
 int main() {
     int serverSockfd, clientSockfd;
@@ -11,8 +12,8 @@ int main() {
 
     serverSockfd = socket(AF_INET6, SOCK_STREAM, 0);
     serverAddress.sin6_family = AF_INET6;
-    inet_pton(AF_INET6, "1::2", serverAddress.sin6_addr.s6_addr);
-    serverAddress.sin6_port = htons(9734);
+    inet_pton(AF_INET6, nidManageAddr, serverAddress.sin6_addr.s6_addr);
+    serverAddress.sin6_port = htons(nidManagePort);
     serverLen = sizeof(serverAddress);
     bind(serverSockfd, (struct sockaddr *)&serverAddress, serverLen);
 
@@ -26,6 +27,7 @@ int main() {
         clientSockfd = accept(serverSockfd, (struct sockaddr *)&clientAddress, &clientLen);        
         read(clientSockfd, &request, requestLen);
         memcpy(response.nid, request.nid, sizeof(request.nid));
+        /*TODO: add database operations to validate the user information*/
         response.succeed = 1;
         write(clientSockfd, &response, responseLen);
         close(clientSockfd);

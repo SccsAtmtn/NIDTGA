@@ -53,7 +53,7 @@ int main() {
     
     serverAddress.sin6_family = AF_INET6;
     inet_pton(AF_INET6, ipGenerateAddr, serverAddress.sin6_addr.s6_addr);
-    serverAddress.sin6_port = htons(ipGenerateAddr);
+    serverAddress.sin6_port = htons(ipGeneratePort);
     serverLen = sizeof(serverAddress);
     bind(serverSockfd, (struct sockaddr *)&serverAddress, serverLen);
 
@@ -65,7 +65,9 @@ int main() {
         printf("server waiting.\n");
 
         clientSockfd = accept(serverSockfd, (struct sockaddr *)&clientAddress, &clientLen);
-        
+
+        printf("start handle user's request.\n");
+
         read(clientSockfd, &portalRequest, sizeof(portalRequest));
      
         strcpy(nidRequest.nid, portalRequest.nid);
@@ -78,14 +80,15 @@ int main() {
         if (portalResponse.succeed) { 
             generateLIP(&portalResponse.lip, portalResponse.nid);
             /*
+            TODO: add database operations to record the login user
             inet_ntop(AF_INET6, &portalRequest.ip, clientIP, sizeof(clientIP));
             */
         }
         else 
             memset(portalResponse.lip.s6_addr, 0, sizeof(portalResponse.lip.s6_addr)); 
 
-
         write(clientSockfd, &portalResponse, sizeof(portalResponse));
+        printf("response one user.");
         close(clientSockfd);      
     }
 }
