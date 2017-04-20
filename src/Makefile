@@ -2,12 +2,14 @@ all: nid_management ip_generation
 
 CC = gcc
 
-CFLAGS = -g -Wall -ansi
+CFLAGS = -g -Wall -ansi 
+
+LINK = -L/usr/lib/mysql/ -lmysqlclient
 
 INCLUDE = ../include
 
 nid_management: nid_management.c
-	$(CC) nid_management.c -I$(INCLUDE) $(CFLAGS) -o nid_management
+	$(CC) nid_management.c -I$(INCLUDE) $(CFLAGS) $(LINK) -o nid_management
 
 ip_generation: ip_generation.c
-	$(CC) ip_generation.c -I$(INCLUDE) $(CFLAGS) -o ip_generation
+	$(CC) ip_generation.c -I$(INCLUDE) $(CFLAGS) $(LINK) -o ip_generation

@@ -26,9 +26,29 @@ int main() {
         clientLen = sizeof(clientAddress);
         clientSockfd = accept(serverSockfd, (struct sockaddr *)&clientAddress, &clientLen);        
         read(clientSockfd, &request, requestLen);
+        
+        MYSQL myConnection;
+        mysql_init(&myConnection);
+        while (!mysql_real_connect(&myConnection, "localhost", "sccsatmtn", "7.24ying=myworld", "NIDManagement", 0, NULL, 0)) {
+            printf("Connection failed\n");
+        }
+        char sql[250];
+        sprintf(sql, "SELECT nid FROM NIDUserInfo WHERE nid=\'%s\' and passwd=\'%s\'", request.nid, request.passwd);
+        int res = mysql_query(&myConnection, sql); 
+        if (res) {
+            printf("SELECT error %d: %s\n", mysql_errno(&myConnection), mysql_error(&myConnection));
+        }
+        else {
+            MYSQL_RES *resPtr = mysql_store_result(&myConnection); 
+            if (mysql_num_rows(resPtr)) 
+                response.succeed = 1;
+            else
+                response.succeed = 0;
+            mysql_free_result(resPtr);
+        }
+        mysql_close(&myConnection);
+
         memcpy(response.nid, request.nid, sizeof(request.nid));
-        /*TODO: add database operations to validate the user information*/
-        response.succeed = 1;
         write(clientSockfd, &response, responseLen);
         close(clientSockfd);
     }

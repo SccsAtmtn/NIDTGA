@@ -88,7 +88,7 @@ int main() {
             memset(portalResponse.lip.s6_addr, 0, sizeof(portalResponse.lip.s6_addr)); 
 
         write(clientSockfd, &portalResponse, sizeof(portalResponse));
-        printf("response one user.");
+        printf("response one user.\n");
         close(clientSockfd);      
     }
 }
