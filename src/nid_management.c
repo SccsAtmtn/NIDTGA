@@ -29,7 +29,7 @@ int main() {
         
         MYSQL myConnection;
         mysql_init(&myConnection);
-        while (!mysql_real_connect(&myConnection, "localhost", "sccsatmtn", "7.24ying=myworld", "NIDManagement", 0, NULL, 0)) {
+        while (!mysql_real_connect(&myConnection, "localhost", "sccsatmtn", "secret", "NIDManagement", 0, NULL, 0)) {
             printf("Connection failed\n");
         }
         char sql[250];
