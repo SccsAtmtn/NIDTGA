@@ -3,7 +3,22 @@
 #include "nid_interface.h"
 #include "configuration.h"
 
-void generateLIP(struct in6_addr *ipPtr, char *nid) {
+char dbUser[NAME_LEN], dbPasswd[PASSWD_LEN], dbName[NAME_LEN], dbTableName[2][NAME_LEN]; 
+
+void read_mysql_configuration() {
+    FILE *fin = fopen("/home/sccsatmtn/database/IPdb.conf", "r");
+    fgets(dbUser, NAME_LEN, fin);
+    fgets(dbPasswd, PASSWD_LEN, fin);
+    fgets(dbName, NAME_LEN, fin);
+    fgets(dbTableName[0], NAME_LEN, fin);
+    fgets(dbTableName[1], NAME_LEN, fin);
+    fclose(fin);
+
+    dbUser[strlen(dbUser)-1] = dbPasswd[strlen(dbPasswd)-1] = dbName[strlen(dbName)-1] = '\0';
+    dbTableName[0][strlen(dbTableName[0])-1] = dbTableName[1][strlen(dbTableName[1])-1] = '\0'; 
+}
+
+void generate_lip(struct in6_addr *ipPtr, char *nid) {
     int i, len;
     uint8_t nidByte[10];
     memset(ipPtr->s6_addr, 0, sizeof(ipPtr->s6_addr));
@@ -38,16 +53,108 @@ struct NIDResponse ask_nid_management(struct NIDRequest nidRequest) {
     return nidResponse;
 }
 
+int delete_duid(char duid[], struct in6_addr ip, int table) {
+    char sql[SQL_LEN];
+    char ipStr[IP_LEN];
+    printf("%s\n", ipStr);
+    inet_ntop(AF_INET6, ip.s6_addr, ipStr, sizeof(ipStr));
+    sprintf(sql, "SELECT duid FROM %s WHERE ip=\'%s\'", dbTableName[table], ipStr);
+    printf("delete ip %s\n", ipStr);
+
+    MYSQL myConn;
+    mysql_init(&myConn);
+    mysql_real_connect(&myConn, "localhost", dbUser, dbPasswd, dbName, 0, NULL, 0);
+    printf("start select\n");
+    int res = mysql_query(&myConn, sql);
+    MYSQL_RES *resPtr = mysql_store_result(&myConn);
+    MYSQL_ROW sqlRow = mysql_fetch_row(resPtr);
+    mysql_free_result(resPtr);
+    strcpy(duid, sqlRow[0]);
+    sprintf(sql, "DELETE FROM %s WHERE ip=\'%s\'", dbTableName[table], ipStr);
+    res = mysql_query(&myConn, sql);
+    mysql_close(&myConn);
+    printf("select complete\n");
+    return 1;
+}  
+
+void insert_duid(char duid[], struct in6_addr ip) {
+    char sql[SQL_LEN];
+    char ipStr[IP_LEN];
+    inet_ntop(AF_INET6, ip.s6_addr, ipStr, sizeof(ipStr));
+    sprintf(sql, "INSERT INTO %s VALUES(\'%s\', \'%s\')", dbTableName[LONGTERM_TABLE], duid, ipStr);
+    
+    MYSQL myConn;
+    mysql_init(&myConn);
+    mysql_real_connect(&myConn, "localhost", dbUser, dbPasswd, dbName, 0, NULL, 0);
+    int res = mysql_query(&myConn, sql);
+    mysql_close(&myConn); 
+}
+
+void process_log_in_request(int clientSockfd) {
+    printf("start process log in request\n");
+    struct PortalLogInRequest portalRequest;
+    struct PortalLogInResponse portalResponse;
+    struct NIDRequest nidRequest;
+    struct NIDResponse nidResponse;
+    
+    read(clientSockfd, &portalRequest, sizeof(portalRequest));
+    
+    strcpy(nidRequest.nid, portalRequest.nid);
+    strcpy(nidRequest.passwd, portalRequest.passwd); 
+
+    printf("nid: %s\n", portalRequest.nid);
+    printf("passwd: %s\n", portalRequest.passwd);
+    nidResponse = ask_nid_management(nidRequest);
+        
+    printf("ask nid management complete\n");
+
+    strcpy(portalResponse.nid, nidResponse.nid);
+    portalResponse.succeed = nidResponse.succeed; 
+    if (portalResponse.succeed) { 
+        generate_lip(&portalResponse.lip, portalResponse.nid);
+        char duid[DUID_LEN];
+        printf("duid: %s\n", duid);
+        int res = delete_duid(duid, portalRequest.ip, TEMPORARY_TABLE);
+        /* TODO: portalRequest.ip should be changed to portalResponse.lip */
+        insert_duid(duid, portalRequest.ip);
+    }
+    else 
+        memset(portalResponse.lip.s6_addr, 0, sizeof(portalResponse.lip.s6_addr)); 
+
+    char tempIP[IP_LEN];
+    inet_ntop(AF_INET6, portalResponse.lip.s6_addr, tempIP, sizeof(tempIP));
+    printf("lip: %s\n", tempIP);
+    write(clientSockfd, &portalResponse, sizeof(portalResponse));
+}
+
+void process_log_out_request(int clientSockfd) {
+    printf("start process log_out_request\n");
+    struct PortalLogOutRequest portalRequest;
+    struct PortalLogOutResponse portalResponse;
+
+    read(clientSockfd, &portalRequest, sizeof(portalRequest));
+    
+    printf("nid: %s\n", portalRequest.nid);
+    
+    char duid[DUID_LEN];
+    int res = delete_duid(duid, portalRequest.ip, LONGTERM_TABLE);
+
+    strcpy(portalResponse.nid, portalRequest.nid);
+    portalResponse.succeed = res;
+
+    write(clientSockfd, &portalResponse, sizeof(portalResponse));
+}
+
 int main() {
+    struct PortalLogOutRequest portalRequest;
     int serverSockfd, clientSockfd;
     int serverLen, clientLen;
     struct sockaddr_in6 serverAddress;
     struct sockaddr_in6 clientAddress;
-    struct PortalRequest portalRequest;
-    struct PortalResponse portalResponse;
-    struct NIDRequest nidRequest;
-    struct NIDResponse nidResponse;
-    char clientIP[100];
+    char requestType;
+
+    printf("%d\n", sizeof(portalRequest));
+    read_mysql_configuration();
 
     serverSockfd = socket(AF_INET6, SOCK_STREAM, 0);
     
@@ -67,28 +174,20 @@ int main() {
         clientSockfd = accept(serverSockfd, (struct sockaddr *)&clientAddress, &clientLen);
 
         printf("start handle user's request.\n");
-
-        read(clientSockfd, &portalRequest, sizeof(portalRequest));
-     
-        strcpy(nidRequest.nid, portalRequest.nid);
-        strcpy(nidRequest.passwd, portalRequest.passwd); 
-
-        nidResponse = ask_nid_management(nidRequest);
         
-        strcpy(portalResponse.nid, nidResponse.nid);
-        portalResponse.succeed = nidResponse.succeed; 
-        if (portalResponse.succeed) { 
-            generateLIP(&portalResponse.lip, portalResponse.nid);
-            /*
-            TODO: add database operations to record the login user
-            inet_ntop(AF_INET6, &portalRequest.ip, clientIP, sizeof(clientIP));
-            */
-        }
-        else 
-            memset(portalResponse.lip.s6_addr, 0, sizeof(portalResponse.lip.s6_addr)); 
+        read(clientSockfd, &requestType, sizeof(requestType));
 
-        write(clientSockfd, &portalResponse, sizeof(portalResponse));
+        printf("%c\n", requestType);
+
+        if (requestType==LOG_IN) 
+            process_log_in_request(clientSockfd);
+        else
+            process_log_out_request(clientSockfd);
+
         printf("response one user.\n");
+
         close(clientSockfd);      
     }
+   
+    return EXIT_SUCCESS;
 }
