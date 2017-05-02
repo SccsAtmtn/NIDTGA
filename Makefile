@@ -4,7 +4,7 @@ CC = gcc
 
 INCLUDE = ./include/
 
-CFLAGS = -g -Wall -ansi
+CFLAGS = -g -Wall
 
 MAKE = make
 

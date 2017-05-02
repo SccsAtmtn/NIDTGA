@@ -53,13 +53,25 @@ struct NIDResponse ask_nid_management(struct NIDRequest nidRequest) {
     return nidResponse;
 }
 
-int delete_duid(char duid[], struct in6_addr ip, int table) {
+void convert_to_hex(unsigned char duid[], unsigned char duidByte[]) {
+    for (int i=0; i<strlen(duidByte); ++i) {
+        duid[i*2] = (duidByte[i] & 240) >> 4;
+        duid[i*2+1] = (duidByte[i] & 15);
+    }
+    duid[strlen(duidByte)*2] = '\0';
+    for (int i=0; i<strlen(duid); ++i)
+        if (duid[i]<10) 
+            duid[i] = duid[i]+'0';
+        else
+            duid[i] = duid[i]+'a'-10;
+}
+
+int delete_duid(unsigned char duid[], struct in6_addr ip, int table) {
     char sql[SQL_LEN];
     char ipStr[IP_LEN];
-    printf("%s\n", ipStr);
     inet_ntop(AF_INET6, ip.s6_addr, ipStr, sizeof(ipStr));
-    sprintf(sql, "SELECT duid FROM %s WHERE ip=\'%s\'", dbTableName[table], ipStr);
-    printf("delete ip %s\n", ipStr);
+    printf("delete_duid ip: %s\n", ipStr);
+    sprintf(sql, "SELECT duid, ip FROM %s WHERE ip=\'%s\'", dbTableName[table], ipStr);
 
     MYSQL myConn;
     mysql_init(&myConn);
@@ -67,17 +79,21 @@ int delete_duid(char duid[], struct in6_addr ip, int table) {
     printf("start select\n");
     int res = mysql_query(&myConn, sql);
     MYSQL_RES *resPtr = mysql_store_result(&myConn);
+    printf("find %d\n", mysql_num_rows(resPtr));
     MYSQL_ROW sqlRow = mysql_fetch_row(resPtr);
     mysql_free_result(resPtr);
     strcpy(duid, sqlRow[0]);
+    printf("find %s\n", sqlRow[0]);
+    /*convert_to_hex(duid, duidByte);*/
     sprintf(sql, "DELETE FROM %s WHERE ip=\'%s\'", dbTableName[table], ipStr);
+    printf("delete ip %s\n", ipStr);
     res = mysql_query(&myConn, sql);
     mysql_close(&myConn);
-    printf("select complete\n");
+    printf("delete complete\n");
     return 1;
 }  
 
-void insert_duid(char duid[], struct in6_addr ip) {
+void insert_duid(unsigned char duid[], struct in6_addr ip) {
     char sql[SQL_LEN];
     char ipStr[IP_LEN];
     inet_ntop(AF_INET6, ip.s6_addr, ipStr, sizeof(ipStr));
@@ -112,11 +128,10 @@ void process_log_in_request(int clientSockfd) {
     portalResponse.succeed = nidResponse.succeed; 
     if (portalResponse.succeed) { 
         generate_lip(&portalResponse.lip, portalResponse.nid);
-        char duid[DUID_LEN];
-        printf("duid: %s\n", duid);
+        unsigned char duid[DUID_LEN];
         int res = delete_duid(duid, portalRequest.ip, TEMPORARY_TABLE);
-        /* TODO: portalRequest.ip should be changed to portalResponse.lip */
-        insert_duid(duid, portalRequest.ip);
+        printf("duid: %s\n", duid);
+        insert_duid(duid, portalResponse.lip);
     }
     else 
         memset(portalResponse.lip.s6_addr, 0, sizeof(portalResponse.lip.s6_addr)); 
@@ -133,10 +148,13 @@ void process_log_out_request(int clientSockfd) {
     struct PortalLogOutResponse portalResponse;
 
     read(clientSockfd, &portalRequest, sizeof(portalRequest));
+    for (int i=0; i<16; ++i)
+        printf("%d ", portalRequest.ip.s6_addr[i]);
+    printf("\n");
     
     printf("nid: %s\n", portalRequest.nid);
     
-    char duid[DUID_LEN];
+    unsigned char duid[DUID_LEN];
     int res = delete_duid(duid, portalRequest.ip, LONGTERM_TABLE);
 
     strcpy(portalResponse.nid, portalRequest.nid);

@@ -2,7 +2,7 @@ all: nid_management ip_generation
 
 CC = gcc
 
-CFLAGS = -g -Wall -ansi 
+CFLAGS = -g -Wall
 
 LINK = -L/usr/lib/mysql/ -lmysqlclient
 
